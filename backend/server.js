@@ -170,15 +170,50 @@ app.post('/api/threads', authenticateToken, async (req, res) => {
 // 5. スレッド一覧取得API（ログイン必須）
 // ──────────────────────────────────────────
 app.get('/api/threads', authenticateToken, async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const sort = req.query.sort || 'thread_new'; // デフォルトはスレッド新着順
+  const limit = 5; 
+  const offset = (page - 1) * limit;
+
   try {
+    // 1. 総件数の取得
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM threads WHERE is_deleted = false'
+    );
+    const totalThreads = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalThreads / limit);
+
+    // 2. 並び替え条件（ORDER BY）の動的組み立て
+    // COALESCE(MAX(p.created_at), t.created_at) は「最新コメント日時、なければスレ作成日時」を意味します
+    let orderByClause = 'ORDER BY t.created_at DESC'; // thread_new（スレ新着順）
+    
+    if (sort === 'comment_new') {
+      orderByClause = 'ORDER BY COALESCE(MAX(p.created_at), t.created_at) DESC'; // コメント新着順
+    }
+
+    // SQLをグループ化（GROUP BY）に対応させて、最新コメント時間を計算できるようにします
     const result = await pool.query(`
-      SELECT t.id, t.title, t.created_at, t.user_id, u.display_name AS username 
+      SELECT 
+        t.id, 
+        t.title, 
+        t.created_at, 
+        t.user_id, 
+        u.display_name AS username,
+        COALESCE(MAX(p.created_at), t.created_at) AS last_activity
       FROM threads t
       LEFT JOIN users u ON t.user_id = u.id
+      LEFT JOIN posts p ON t.id = p.thread_id AND p.is_deleted = false
       WHERE t.is_deleted = false
-      ORDER BY t.created_at DESC
-    `);
-    res.json(result.rows);
+      GROUP BY t.id, u.display_name
+      ${orderByClause}
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+
+    res.json({
+      threads: result.rows,
+      currentPage: page,
+      totalPages: totalPages
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'サーバーエラーが発生しました。' });
