@@ -30,6 +30,9 @@ CREATE TABLE users (
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    display_name VARCHAR(50), -- 表示用のハンドル名
+    is_verified BOOLEAN DEFAULT false, -- メール認証フラグ
+    verification_token VARCHAR(255), -- メール確認用トークン
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -37,6 +40,7 @@ CREATE TABLE threads (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     user_id INTEGER REFERENCES users(id),
+    is_deleted BOOLEAN DEFAULT false, -- 論理削除フラグ
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -45,5 +49,6 @@ CREATE TABLE posts (
     thread_id INTEGER REFERENCES threads(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id),
     content TEXT NOT NULL,
+    is_deleted BOOLEAN DEFAULT false, -- 論理削除フラグ
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
