@@ -23,7 +23,10 @@ function App() {
   const [error, setError] = useState('');
   
   // ログインユーザー情報保持用
-  const [user, setUser] = useState<{ username: string } | null>(null);
+  // const [user, setUser] = useState<{ username: string; isAdmin: boolean } | null>(null);
+  const [user, setUser] = useState<{ id: number; username: string; isAdmin: boolean } | null>(null);
+
+  const [editDisplayName, setEditDisplayName] = useState('');
 
   // ──────────────────────────────────────────
   // 1. 会員登録処理
@@ -64,7 +67,8 @@ function App() {
       // トークンをブラウザの localStorage に保存
       localStorage.setItem('token', data.token);
       
-      setUser({ username: data.user.username });
+      // setUser({ username: data.user.username, isAdmin: data.user.isAdmin });
+      setUser({ id: data.user.id, username: data.user.username, isAdmin: data.user.isAdmin });
       setView('dashboard'); // メイン画面へ移行
       
       // ログイン直後にスレッド一覧を自動で取得する
@@ -183,6 +187,77 @@ function App() {
     }
   };
 
+// ─── 【管理者】スレッド削除関数 ───
+  const handleDeleteThread = async (threadId: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // 親要素のクリックイベント（スレッド詳細へ行く処理）を防ぐ
+    if (!window.confirm('本当にこのスレッドを削除しますか？内のコメントもすべて消去されます。')) return;
+    
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`/api/threads/${threadId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error);
+      }
+      fetchThreadsList(); // 一覧を再読み込み
+    } catch (err: any) { alert(err.message); }
+  };
+
+  // ─── 【管理者】コメント削除関数 ───
+  const handleDeletePost = async (postId: number) => {
+    if (!window.confirm('このコメントを削除しますか？')) return;
+    
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`/api/posts/${postId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error);
+      }
+      if (activeThread) fetchPosts(activeThread.id); // コメント一覧を再読み込み
+    } catch (err: any) { alert(err.message); }
+  };
+
+  // ─── ハンドル名変更関数 ───
+  const handleUpdateDisplayName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editDisplayName.trim()) return;
+    const token = localStorage.getItem('token');
+
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ newDisplayName: editDisplayName })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      // フロント側のユーザー表示ステートも更新する
+      if (user) {
+        setUser({ ...user, username: data.displayName });
+      }
+      alert('ハンドル名を設定しました！');
+      setEditDisplayName('');
+      
+      // 画面表示をリフレッシュするために一覧を再取得
+      fetchThreadsList();
+      if (activeThread) fetchPosts(activeThread.id);
+
+    } catch (err: any) {
+      alert('ハンドル名の変更に失敗: ' + err.message);
+    }
+  };
+
   // ──────────────────────────────────────────
   // 画面レンダリング（条件分岐）
   // ──────────────────────────────────────────
@@ -196,6 +271,21 @@ function App() {
           <button onClick={handleLogout} style={{ padding: '6px 12px', cursor: 'pointer' }}>ログアウト</button>
         </div>
         <p>ログインユーザー: <strong>{user.username}</strong> さん</p>
+
+        {/* ─── ここからハンドル名変更フォームを追加 ─── */}
+        <form onSubmit={handleUpdateDisplayName} style={{ display: 'flex', gap: '10px', marginBottom: '15px', alignItems: 'center', backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+          <span style={{ fontSize: '14px' }}>ハンドル名変更:</span>
+          <input 
+            type="text" 
+            placeholder="新しいハンドル名" 
+            value={editDisplayName} 
+            onChange={(e) => setEditDisplayName(e.target.value)}
+            style={{ padding: '4px 8px', width: '150px', borderRadius: '4px', border: '1px solid #ccc' }}
+          />
+          <button type="submit" style={{ padding: '4px 10px', cursor: 'pointer', fontSize: '13px' }}>変更</button>
+        </form>
+        {/* ────────────────────────────────────────── */}
+  
         <hr style={{ border: '1px solid #eee', margin: '20px 0' }} />
 
         {/* サブ条件分岐①：特定のスレッド詳細（コメント画面）を開いている場合 */}
@@ -217,6 +307,15 @@ function App() {
                   <div key={p.id} style={{ borderBottom: '1px dashed #eee', paddingBottom: '8px', marginBottom: '10px' }}>
                     <small style={{ color: '#666' }}>
                       {index + 1}: <strong>{p.username || '退会済ユーザー'}</strong> ({new Date(p.created_at).toLocaleString()})
+
+                    {user && (user.isAdmin || user.id === p.user_id) && (
+                    <button 
+                      onClick={() => handleDeletePost(p.id)} 
+                      style={{ marginLeft: '12px', color: 'red', cursor: 'pointer', padding: '1px 5px', fontSize: '11px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff' }}
+                    >
+                    🗑 削除
+                    </button>
+                    )}
                     </small>
                     <p style={{ margin: '5px 0 0 0', whiteSpace: 'pre-wrap', color: '#222', fontSize: '15px' }}>{p.content}</p>
                   </div>
@@ -275,6 +374,14 @@ function App() {
                   >
                     <h4 style={{ margin: '0 0 5px 0', color: '#0066cc', textDecoration: 'underline' }}>{t.title}</h4>
                     <small style={{ color: 'gray' }}>作成者: {t.username || '不明'} | {new Date(t.created_at).toLocaleString()}</small>
+                    {user && (user.isAdmin || user.id === t.user_id) && (
+                    <button 
+                      onClick={(e) => handleDeleteThread(t.id, e)} 
+                      style={{ marginLeft: '15px', color: 'red', cursor: 'pointer', padding: '2px 6px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff' }}
+                    >
+                    🗑 削除
+                    </button>
+                    )}
                   </li>
                 ))}
               </ul>
