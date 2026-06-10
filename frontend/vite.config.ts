@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc' // もしくは @vitejs/plugin-react
 
 export default defineConfig({
+
+  // 相対パスへ
+  base: './',
+
   plugins: [react()],
   server: {
     proxy: {

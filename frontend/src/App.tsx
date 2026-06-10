@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { MyPage } from './components/MyPage';
+import { customFetch } from './utils/client';
 
 function App() {
   // 画面の切り替え管理 ('register' | 'login' | 'dashboard' | 'mypage')
@@ -39,7 +41,7 @@ function App() {
     e.preventDefault();
     setMessage(''); setError('');
     try {
-      const response = await fetch('/api/register', {
+      const response = await customFetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
@@ -58,7 +60,7 @@ function App() {
     e.preventDefault();
     setMessage(''); setError('');
     try {
-      const response = await fetch('/api/login', {
+      const response = await customFetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -93,7 +95,7 @@ function App() {
     const currentSort = sortOption || sortBy; 
     
     try {
-      const response = await fetch(`/api/threads?page=${page}&sort=${currentSort}`, {
+      const response = await customFetch(`/api/threads?page=${page}&sort=${currentSort}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -124,7 +126,7 @@ function App() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch('/api/threads', {
+      const response = await customFetch('/api/threads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +150,7 @@ function App() {
   const fetchPosts = async (threadId: number) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/threads/${threadId}/posts`, {
+      const response = await customFetch(`/api/threads/${threadId}/posts`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -171,7 +173,7 @@ function App() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch(`/api/threads/${activeThread.id}/posts`, {
+      const response = await customFetch(`/api/threads/${activeThread.id}/posts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -196,7 +198,7 @@ function App() {
     
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/threads/${threadId}`, {
+      const response = await customFetch(`/api/threads/${threadId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -214,7 +216,7 @@ function App() {
     
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/posts/${postId}`, {
+      const response = await customFetch(`/api/posts/${postId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -233,7 +235,7 @@ function App() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch('/api/user/profile', {
+      const response = await customFetch('/api/user/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -257,42 +259,16 @@ function App() {
   // 画面レンダリング
   // ──────────────────────────────────────────
 
-  // 【パターンA】マイページ画面
+  // 【パターンA】マイページ画面（コンポーネント化後）
   if (view === 'mypage' && user) {
     return (
-      <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif' }}>
-        <button onClick={() => setView('dashboard')} style={{ marginBottom: '20px', padding: '6px 12px', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#fff' }}>
-          ⬅ 掲示板に戻る
-        </button>
-        
-        <div style={{ border: '1px solid #ddd', padding: '20px', borderRadius: '8px', backgroundColor: '#f9f9f9' }}>
-          <h2 style={{ marginTop: 0 }}>👤 マイページ</h2>
-          <hr style={{ border: '1px solid #eee', margin: '15px 0' }} />
-          
-          <div style={{ marginBottom: '15px', fontSize: '15px', lineHeight: '2' }}>
-            <p><strong>現在のハンドル名:</strong> {user.username}</p>
-            <p><strong>メールアドレス:</strong> {user.email}</p>
-            <p><strong>アカウント権限:</strong> {user.isAdmin ? <span style={{ color: 'red', fontWeight: 'bold' }}>管理者</span> : <span>一般ユーザー</span>}</p>
-          </div>
-
-          <hr style={{ border: '1px solid #eee', margin: '20px 0' }} />
-
-          <h3>✏ ハンドル名の変更</h3>
-          <form onSubmit={handleUpdateDisplayName} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <input 
-              type="text" 
-              placeholder="新しいハンドル名を入力" 
-              value={editDisplayName} 
-              onChange={(e) => setEditDisplayName(e.target.value)}
-              style={{ padding: '8px', flex: 1, borderRadius: '4px', border: '1px solid #ccc' }}
-              required
-            />
-            <button type="submit" style={{ padding: '8px 15px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-              変更を保存
-            </button>
-          </form>
-        </div>
-      </div>
+      <MyPage 
+        user={user}
+        editDisplayName={editDisplayName}
+        setEditDisplayName={setEditDisplayName}
+        handleUpdateDisplayName={handleUpdateDisplayName}
+        onBackToDashboard={() => setView('dashboard')}
+      />
     );
   }
 

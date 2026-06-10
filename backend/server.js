@@ -8,7 +8,12 @@ const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
+// 💡 ルーターを作る(.envで値を指定 )
+const apiBasePath = process.env.API_BASE_PATH || '';
+const bbsRouter = express.Router();
 const PORT = process.env.PORT || 3000;
+const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
 
 // ミドルウェアの設定
 app.use(cors());
@@ -42,11 +47,11 @@ const authenticateToken = (req, res, next) => {
 // ──────────────────────────────────────────
 // 2. ユーザー登録API
 // ──────────────────────────────────────────
-app.post('/api/register', async (req, res) => {
+bbsRouter.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
 
   if (!username || !email || !password) {
-    return res.status(400).json({ error: 'すべての項目を入力してください。' });
+    return res.status(400).json({ error: 'すべての★項目を入力してください。' });
   }
 
   try {
@@ -72,11 +77,16 @@ app.post('/api/register', async (req, res) => {
     );
 
     // ─── 【模擬メール送信】コンソールに確認URLを出力 ───
-    const verificationUrl = `http://localhost:3000/api/verify?token=${verificationToken}`;
+    const protocol = req.protocol; 
+    // 💡 2. 現在のドメイン名とポート（example.com や localhost:3000）を取得
+    const host = req.get('host'); 
+    // 💡 3. これらをガッチャンコして、クリック可能な完全なURLを自動生成！
+    const verificationUrl = `${protocol}://${host}${apiBasePath}/api/verify?token=${verificationToken}`;
+
     console.log('\n==================================================');
     console.log(`【メール模擬送信】 ${username} さん宛て`);
     console.log(`以下のURLをクリックしてアカウントを有効化してください：`);
-    console.log(verificationUrl);
+    console.log(verificationUrl); // ➔ ターミナル上でそのまま青いリンクになり、クリック可能になります！
     console.log('==================================================\n');
 
     res.status(201).json({
@@ -92,7 +102,7 @@ app.post('/api/register', async (req, res) => {
 // ──────────────────────────────────────────
 // 3. ログインAPI
 // ──────────────────────────────────────────
-app.post('/api/login', async (req, res) => {
+bbsRouter.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -103,7 +113,7 @@ app.post('/api/login', async (req, res) => {
     // ユーザーチェック
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) {
-      return res.status(400).json({ error: 'メールアドレスまたはパスワードが正しくありません。' });
+      return res.status(400).json({ error: 'メールアドレスが正しくありません。' });
     }
 
     const user = result.rows[0];
@@ -116,7 +126,7 @@ app.post('/api/login', async (req, res) => {
     // パスワードの照合
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
-      return res.status(400).json({ error: 'メールアドレスまたはパスワードが正しくありません。' });
+      return res.status(400).json({ error: 'パスワードが正しくありません。' });
     }
 
     // JWTトークンの発行
@@ -143,7 +153,7 @@ app.post('/api/login', async (req, res) => {
 // ──────────────────────────────────────────
 // 4. スレッド作成API（ログイン必須）
 // ──────────────────────────────────────────
-app.post('/api/threads', authenticateToken, async (req, res) => {
+bbsRouter.post('/api/threads', authenticateToken, async (req, res) => {
   const { title } = req.body;
 
   if (!title) {
@@ -169,7 +179,7 @@ app.post('/api/threads', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 5. スレッド一覧取得API（ログイン必須）
 // ──────────────────────────────────────────
-app.get('/api/threads', authenticateToken, async (req, res) => {
+bbsRouter.get('/api/threads', authenticateToken, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const sort = req.query.sort || 'thread_new'; // デフォルトはスレッド新着順
   const limit = 5; 
@@ -223,7 +233,7 @@ app.get('/api/threads', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 6. 特定スレッドのコメント一覧取得API（ログイン必須）
 // ──────────────────────────────────────────
-app.get('/api/threads/:threadId/posts', authenticateToken, async (req, res) => {
+bbsRouter.get('/api/threads/:threadId/posts', authenticateToken, async (req, res) => {
   const { threadId } = req.params;
   try {
     const result = await pool.query(`
@@ -243,7 +253,7 @@ app.get('/api/threads/:threadId/posts', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 7. コメント投稿API（ログイン必須）
 // ──────────────────────────────────────────
-app.post('/api/threads/:threadId/posts', authenticateToken, async (req, res) => {
+bbsRouter.post('/api/threads/:threadId/posts', authenticateToken, async (req, res) => {
   const { threadId } = req.params;
   const { content } = req.body;
 
@@ -270,7 +280,7 @@ app.post('/api/threads/:threadId/posts', authenticateToken, async (req, res) => 
 // ──────────────────────────────────────────
 // 8. スレッド削除API（論理削除 ＆ 本人または管理者）
 // ──────────────────────────────────────────
-app.delete('/api/threads/:threadId', authenticateToken, async (req, res) => {
+bbsRouter.delete('/api/threads/:threadId', authenticateToken, async (req, res) => {
   const { threadId } = req.params;
   const { userId, isAdmin } = req.user; // トークンから操作ユーザーの情報を取得
 
@@ -304,7 +314,7 @@ app.delete('/api/threads/:threadId', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 9. コメント削除API（論理削除 ＆ 本人または管理者）
 // ──────────────────────────────────────────
-app.delete('/api/posts/:postId', authenticateToken, async (req, res) => {
+bbsRouter.delete('/api/posts/:postId', authenticateToken, async (req, res) => {
   const { postId } = req.params;
   const { userId, isAdmin } = req.user;
 
@@ -335,7 +345,7 @@ app.delete('/api/posts/:postId', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 10. ハンドル名変更API（ログイン必須）
 // ──────────────────────────────────────────
-app.put('/api/user/profile', authenticateToken, async (req, res) => {
+bbsRouter.put('/api/user/profile', authenticateToken, async (req, res) => {
   const { newDisplayName } = req.body;
   const { userId } = req.user; // JWTから自分のユーザーIDを取得
 
@@ -360,7 +370,7 @@ app.put('/api/user/profile', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 11. メールアドレス確認（アカウント有効化）API
 // ──────────────────────────────────────────
-app.get('/api/verify', async (req, res) => {
+bbsRouter.get('/api/verify', async (req, res) => {
   const { token } = req.query;
 
   if (!token) {
@@ -388,7 +398,7 @@ app.get('/api/verify', async (req, res) => {
       <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
         <h1 style="color: green;">🎉 メール認証が完了しました！</h1>
         <p>アカウントが有効化されました。掲示板のログイン画面からサインインしてください。</p>
-        <p><a href="http://localhost:5173" style="color: blue; text-decoration: underline;">掲示板に戻る</a></p>
+        <p><a href="/" style="color: blue; text-decoration: underline;">掲示板に戻る</a></p>
       </div>
     `);
 
@@ -398,7 +408,70 @@ app.get('/api/verify', async (req, res) => {
   }
 });
 
+// ============================================================
+// パスワード変更エンドポイント（password_hash 完全対応版）
+// ============================================================
+bbsRouter.post('/api/change-password', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: '認証トークンが必要です。' });
+    }
+    const token = authHeader.split(' ')[1];
+    
+    // 1. トークンを検証
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const tokenIdentifier = decoded.username || decoded.id; 
+
+    if (!tokenIdentifier) {
+      return res.status(401).json({ error: 'トークンの解析に失敗しました。' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: '現在のパスワードと新しいパスワードの両方を入力してください。' });
+    }
+
+    // 2. ユーザーをデータベースから取得
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE username = $1 OR id = CAST(CASE WHEN $1 ~ \'^[0-9]+$\' THEN $1 ELSE \'-1\' END AS INTEGER)', 
+      [tokenIdentifier.toString()]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'ユーザーが見つかりません。' });
+    }
+    const user = userResult.rows[0];
+
+    // 3. パスワードの検証 (bcrypt) 💡 カラム名を password_hash に固定
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ error: '現在のパスワードが正しくありません。' });
+    }
+
+    // 4. 新しいパスワードをハッシュ化して保存 💡 カラム名を password_hash に固定
+    const salt = await bcrypt.genSalt(10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+    await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2', 
+      [hashedNewPassword, user.id]
+    );
+
+    res.json({ message: 'パスワードが正常に変更されました。' });
+
+  } catch (error) {
+    console.error('❌ Password Change Error:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'トークンが無効です。' });
+    }
+    res.status(500).json({ error: 'サーバー内部エラーが発生しました。' });
+  }
+});
+
 // サーバー起動
+// 本番環境では「/bbs_api」をつける
+app.use(apiBasePath, bbsRouter);
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
