@@ -5,6 +5,9 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
+const multer = require('multer');
+const path = require('path');
+
 require('dotenv').config();
 
 const app = express();
@@ -16,13 +19,40 @@ const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
 
 // ミドルウェアの設定
-app.use(cors());
+const corsOptions = {
+  // 許可するフロントエンドのURL（環境変数から読み込む）
+  origin: process.env.CORS_FRONTEND_URL || '*'
+};
 app.use(express.json());
 
 // PostgreSQLへの接続設定
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
+
+// ──────────────────────────────────────────
+// 💡 【新設】画像アップロードの設定 (Multer)
+// ──────────────────────────────────────────
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // サーバー内の「uploads」というフォルダに保存する
+    // ⚠️ あらかじめサーバーのルート直下に「uploads」フォルダを手動で作っておいてください
+    cb(null, 'uploads/'); 
+  },
+  filename: (req, file, cb) => {
+    // ファイル名の重複を防ぐため、「現在時刻のタイムスタンプ + 元の拡張子」にする
+    // 例: 1718123456789.jpg
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+// フロントから 'image' というキー名で送られてくる1枚のファイルを受け取る設定
+const upload = multer({ storage: storage });
+
+// 💡 重要：アップロードされた画像フォルダを外部からURLでアクセスできるようにする（静的配信）
+// これにより、http://localhost:3000/uploads/xxx.jpg で画像が表示できるようになります
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ──────────────────────────────────────────
 // 1. 認証チェック用ミドルウェア（必ずAPIより上に配置します）
@@ -229,20 +259,19 @@ bbsRouter.get('/api/threads', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'サーバーエラーが発生しました。' });
   }
 });
-
 // ──────────────────────────────────────────
-// 6. 特定スレッドのコメント一覧取得API（ログイン必須）
+// 6. 特定スレッドのコメント一覧取得API（修正後）
 // ──────────────────────────────────────────
 bbsRouter.get('/api/threads/:threadId/posts', authenticateToken, async (req, res) => {
   const { threadId } = req.params;
   try {
     const result = await pool.query(`
-      SELECT p.id, p.content, p.created_at, p.user_id, u.display_name AS username 
+      SELECT p.id, p.content, p.created_at, p.user_id, p.image_url, u.display_name AS username 
       FROM posts p
       LEFT JOIN users u ON p.user_id = u.id
       WHERE p.thread_id = $1 AND p.is_deleted = false
       ORDER BY p.created_at ASC
-    `, [threadId]);
+    `, [threadId]); // 💡 SELECT に p.image_url を追加しました
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -251,20 +280,26 @@ bbsRouter.get('/api/threads/:threadId/posts', authenticateToken, async (req, res
 });
 
 // ──────────────────────────────────────────
-// 7. コメント投稿API（ログイン必須）
+// 7. コメント投稿API（修正後）
 // ──────────────────────────────────────────
-bbsRouter.post('/api/threads/:threadId/posts', authenticateToken, async (req, res) => {
+// 💡 引数に `upload.single('image')` を追加して、画像ファイルを受け取れるようにします
+bbsRouter.post('/api/threads/:threadId/posts', authenticateToken, upload.single('image'), async (req, res) => {
   const { threadId } = req.params;
   const { content } = req.body;
 
-  if (!content) {
-    return res.status(400).json({ error: 'コメント内容を入力してください。' });
+  // 💡 画像が添付されていればその保存パス（/uploads/ファイル名）を取得、無ければ null
+  const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
+  // 画像もテキストも無い場合はエラー
+  if (!content && !imageUrl) {
+    return res.status(400).json({ error: 'コメント内容または画像を送信してください。' });
   }
 
   try {
+    // 💡 INSERT 文に image_url を追加します
     const result = await pool.query(
-      'INSERT INTO posts (thread_id, user_id, content) VALUES ($1, $2, $3) RETURNING *',
-      [threadId, req.user.userId, content]
+      'INSERT INTO posts (thread_id, user_id, content, image_url) VALUES ($1, $2, $3, $4) RETURNING *',
+      [threadId, req.user.userId, content || '', imageUrl]
     );
 
     res.status(201).json({
@@ -363,6 +398,42 @@ bbsRouter.put('/api/user/profile', authenticateToken, async (req, res) => {
     res.json({ message: 'ハンドル名を更新しました。', displayName: newDisplayName });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'サーバーエラーが発生しました。' });
+  }
+});
+
+// ──────────────────────────────────────────
+// 10.5 ログインユーザー情報取得API（自動ログイン・セッション復旧用）
+// ──────────────────────────────────────────
+bbsRouter.get('/api/me', authenticateToken, async (req, res) => {
+  try {
+    // 💡 ログインJWTから抽出された自分のIDを取得（キー名は userId）
+    const userId = req.user.userId;
+
+    // データベースから最新のユーザー情報を取得
+    const result = await pool.query(
+      'SELECT id, username, email, display_name, is_admin FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'ユーザーが見つかりません。' });
+    }
+
+    const dbUser = result.rows[0];
+
+    // 💡 フロントエンド（App.tsx）の setUser が期待する形に100%合わせてレスポンスを返却
+    res.json({
+      user: {
+        id: dbUser.id,
+        username: dbUser.display_name, // フロント側の表示名ステートにDBの表示名をマッピング
+        email: dbUser.email,
+        isAdmin: dbUser.is_admin
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ /api/me error:', err);
     res.status(500).json({ error: 'サーバーエラーが発生しました。' });
   }
 });

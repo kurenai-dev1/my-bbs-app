@@ -1,15 +1,14 @@
-import { useState } from 'react';
-import { MyPage } from './components/MyPage';
+import { useState, useEffect } from 'react'; 
+import { Header } from './components/Header'; 
+import { ThreadListPage } from './views/ThreadListPage';
+import { ThreadDetailPage } from './views/ThreadDetailPage';
+import { MyPage } from './views/MyPage';
+import { LoginPage } from './views/LoginPage'; 
 import { customFetch } from './utils/client';
 
 function App() {
-  // 画面の切り替え管理 ('register' | 'login' | 'dashboard' | 'mypage')
-  const [view, setView] = useState<'register' | 'login' | 'dashboard' | 'mypage'>('login');
-  
-  // フォーム用ステート
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // 画面の切り替え管理 ('register' | 'login' | 'threadlist' | 'mypage')
+  const [view, setView] = useState<'register' | 'login' | 'threadlist' | 'mypage'>('login');
   
   // スレッド用ステート
   const [threads, setThreads] = useState<any[]>([]);
@@ -27,54 +26,50 @@ function App() {
   // ハンドル名変更用ステート
   const [editDisplayName, setEditDisplayName] = useState('');
 
-  // 状態・エラーメッセージ表示用
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  
   // ログインユーザー情報保持用 (id, username=表示名, email, isAdmin)
   const [user, setUser] = useState<{ id: number; username: string; email: string; isAdmin: boolean } | null>(null);
 
   const [sortBy, setSortBy] = useState('thread_new'); // 'thread_new' または 'comment_new'
 
-  // 1. 会員登録処理
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage(''); setError('');
-    try {
-      const response = await customFetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '登録に失敗しました。');
-      
-      setMessage(data.message);
-      setView('login');
-      setPassword('');
-    } catch (err: any) { setError(err.message); }
-  };
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      // 💡 ユーザー情報をバックエンドから取得する関数を定義
+      const fetchCurrentUser = async () => {
+        try {
+          // ※バックエンドに「ログイン中の自分の情報を返すAPI」がある想定です
+          // もしパスが違っていたら、適宜（/api/user/profile などに）書き換えてください
+          const response = await customFetch('/api/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        
+          if (!response.ok) throw new Error('セッションが切れています');
+          const data = await response.json();
+        
+          // 成功したら、本物のユーザー情報をステートにセット！
+          setUser({ 
+            id: data.user.id, 
+            username: data.user.username, // 💡 ここで本物の名前が入る！
+            email: data.user.email, 
+            isAdmin: data.user.isAdmin 
+          });
+        
+          setView('threadlist');
+          fetchThreadsList(1, token);
+        
+        } catch (err) {
+          // トークンが古かったり、エラーが起きたら安全のためログアウトさせる
+          console.error(err);
+          handleLogout();
+        }
+      };
+      fetchCurrentUser();
+    }
+  }, []);
 
-  // 2. ログイン処理
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage(''); setError('');
-    try {
-      const response = await customFetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'ログインに失敗しました。');
+  // 1. 会員登録処理(views/LoginPage.tsx)
 
-      localStorage.setItem('token', data.token);
-      
-      setUser({ id: data.user.id, username: data.user.username, email: data.user.email || email, isAdmin: data.user.isAdmin });
-      setView('dashboard');
-      fetchThreadsList(1, data.token);
-    } catch (err: any) { setError(err.message); }
-  };
+  // 2. ログイン処理(views/LoginPage.tsx)
 
   // 3. ログアウト処理
   const handleLogout = () => {
@@ -86,6 +81,13 @@ function App() {
     setCurrentPage(1);
     setTotalPages(1);
     setView('login');
+  };
+
+  // ログイン成功時の処理
+  const handleLoginSuccess = (userData: any, token: string) => {
+    setUser(userData);
+    setView('threadlist');
+    fetchThreadsList(1, token); // ログイン直後のスレッド取得
   };
 
   // 4. スレッド一覧を取得する関数
@@ -167,27 +169,42 @@ function App() {
   };
 
   // 7. コメントを新規投稿する関数
-  const handleCreatePost = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newContent || !activeThread) return;
-    const token = localStorage.getItem('token');
+  // 💡 引数に content と imageFile を受け取るように変更します
+  const handleCreatePost = async (content: string, imageFile: File | null) => {
+    if (!activeThread) return;
 
     try {
-      const response = await customFetch(`/api/threads/${activeThread.id}/posts`, {
+      // 1. データの箱（FormData）を作る
+      const formData = new FormData();
+      formData.append('content', content);
+    
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      // 2. ローカルストレージなどから、現在ログイン中のJWTトークンを直接取得する
+      // 💡 あなたのアプリでトークンを保存しているキー名（'token' や 'jwt' など）に合わせてください
+      const token = localStorage.getItem('token'); 
+
+      // 3. ⚠️ customFetch ではなく、生の fetch を使う
+      const response = await fetch(`http://localhost:3000/api/threads/${activeThread.id}/posts`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          // 💡 認証に必要なトークン「だけ」を自前でセットする
           'Authorization': `Bearer ${token}`
+          // ❌ 'Content-Type' は【絶対に書かない】。ブラウザに自動生成させます。
         },
-        body: JSON.stringify({ content: newContent })
+        body: formData, // FormDataをそのまま渡す
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
 
-      setNewContent('');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'コメントの投稿に失敗しました。');
+
+      // 4. 投稿が成功したら、コメント一覧を再取得（お手元の関数名に合わせてください）
       fetchPosts(activeThread.id);
+
     } catch (err: any) {
-      alert('コメント投稿に失敗: ' + err.message);
+      alert(err.message);
     }
   };
 
@@ -267,253 +284,63 @@ function App() {
         editDisplayName={editDisplayName}
         setEditDisplayName={setEditDisplayName}
         handleUpdateDisplayName={handleUpdateDisplayName}
-        onBackToDashboard={() => setView('dashboard')}
+        onBackToThreadList={() => {
+          setView('threadlist');
+          fetchThreadsList(currentPage); // 💡 戻った瞬間に最新のユーザー名を含んだ一覧に更新する
+        }}
       />
     );
   }
-
   // 【パターンB】ログイン後のメインダッシュボード画面
-  if (view === 'dashboard' && user) {
+  if (view === 'threadlist' && user) {
     return (
       <div style={{ fontFamily: 'sans-serif', backgroundColor: '#fff', minHeight: '100vh' }}>
         
-        {/* ─── ［新設］最上部のメニューバー ─── */}
-        <div style={{ backgroundColor: '#f8f9fa', borderBottom: '1px solid #e9ecef', padding: '10px 20px' }}>
-          <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '14px', color: '#495057' }}>
-              こんにちは、<strong>{user.username}</strong> さん 
-              {user.isAdmin && <span style={{ color: 'gold', fontWeight: 'bold', backgroundColor: '#333', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', marginLeft: '6px' }}>管理者</span>}
-            </span>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button 
-                onClick={() => setView('mypage')} 
-                style={{ padding: '5px 12px', cursor: 'pointer', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px', fontSize: '13px', color: '#333' }}
-              >
-                👤 マイページ
-              </button>
-              <button 
-                onClick={handleLogout} 
-                style={{ padding: '5px 12px', cursor: 'pointer', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px', fontSize: '13px', color: '#333' }}
-              >
-                ログアウト
-              </button>
-            </div>
-          </div>
-        </div>
-        {/* ──────────────────────────────────── */}
+        {/* 共通のヘッダーメニュー */}
+        <Header user={user} onViewChange={setView} onLogout={handleLogout} />
 
-        {/* メインコンテンツエリア（十分な幅と余白を確保） */}
-        <div style={{ padding: '30px 20px', maxWidth: '600px', margin: '0 auto' }}>
+        {/* ─── 条件分岐：詳細か一覧か ─── */}
+        {activeThread ? (
           
-          {/* タイトル部分はすっきりと単独配置 */}
-          <h2 style={{ margin: '0 0 25px 0', fontSize: '24px' }}>🌐 会員制掲示板</h2>
-          
-          <hr style={{ border: '1px solid #eee', margin: '0 0 25px 0' }} />
+          /* 1. ⭕ スレッド詳細画面 */
+          <ThreadDetailPage
+            activeThread={activeThread}
+            // 💡 ここが超重要！ThreadDetailPage側が期待している「戻る関数」のProps名に合わせます
+            onBackToConversations={() => setActiveThread(null)}
+            posts={posts}
+            handleCreatePost={handleCreatePost}
+            handleDeletePost={handleDeletePost}
+            user={user}
+          />
 
-          {/* サブ条件分岐①：特定のスレッド詳細を開いている場合 */}
-          {activeThread ? (
-            <div>
-              <button onClick={() => setActiveThread(null)} style={{ marginBottom: '15px', padding: '5px 10px', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#fff' }}>
-                ⬅ スレッド一覧に戻る
-              </button>
-              <h3 style={{ backgroundColor: '#eef', padding: '12px', borderRadius: '4px', margin: '0 0 15px 0' }}>
-                📌 {activeThread.title}
-              </h3>
+        ) : (
 
-              {/* コメント表示エリア */}
-              <div style={{ border: '1px solid #ccc', padding: '15px', borderRadius: '4px', minHeight: '180px', marginBottom: '20px', backgroundColor: '#fff' }}>
-                {posts.length === 0 ? (
-                  <p style={{ color: 'gray' }}>まだコメントがありません。最初のコメントをどうぞ！</p>
-                ) : (
-                  posts.map((p, index) => (
-                    <div key={p.id} style={{ borderBottom: '1px dashed #eee', paddingBottom: '8px', marginBottom: '10px' }}>
-                      <small style={{ color: '#666' }}>
-                        {index + 1}: <strong>{p.username || '退会済ユーザー'}</strong> ({new Date(p.created_at).toLocaleString()})
-                        
-                        {(user.isAdmin || user.id === p.user_id) && (
-                          <button 
-                            onClick={() => handleDeletePost(p.id)} 
-                            style={{ marginLeft: '12px', color: 'red', cursor: 'pointer', padding: '1px 5px', fontSize: '11px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff' }}
-                          >
-                            🗑 削除
-                        </button>
-                        )}
-                      </small>
-                      <p style={{ margin: '5px 0 0 0', whiteSpace: 'pre-wrap', color: '#222', fontSize: '15px' }}>{p.content}</p>
-                    </div>
-                  ))
-                )}
-              </div>
+          /* 2. 通常のスレッド一覧画面 */
+          <ThreadListPage
+            threads={threads}
+            newTitle={newTitle}
+            setNewTitle={setNewTitle}
+            handleCreateThread={handleCreateThread}
+            sortBy={sortBy}
+            handleSortChange={handleSortChange}
+            handleRefreshThreads={handleRefreshThreads}
+            handleSelectThread={handleSelectThread}
+            handleDeleteThread={handleDeleteThread}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            fetchThreadsList={fetchThreadsList}
+            user={user}
+          />
 
-              {/* コメント投稿フォーム */}
-              <form onSubmit={handleCreatePost}>
-                <textarea
-                  placeholder="書き込み内容を入力してください..."
-                  value={newContent}
-                  onChange={(e) => setNewContent(e.target.value)}
-                  style={{ width: '100%', height: '80px', padding: '8px', marginBottom: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #bbb' }}
-                  required
-                />
-                <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                  コメントを書き込む
-                </button>
-              </form>
-            </div>
-          ) : (
-            /* サブ条件分岐②：通常のスレッド一覧画面を表示している場合 */
-            <div>
-              <h3 style={{ margin: '0 0 10px 0' }}>🆕 新規スレッド作成</h3>
-              <form onSubmit={handleCreateThread} style={{ display: 'flex', gap: '10px', marginBottom: '30px' }}>
-                <input
-                  type="text"
-                  placeholder="新しく立てるスレッドのタイトル"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                  required
-                />
-                <button type="submit" style={{ padding: '8px 15px', cursor: 'pointer', backgroundColor: '#0066cc', color: 'white', border: 'none', borderRadius: '4px' }}>
-                  スレを立てる
-                </button>
-              </form>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <h3 style={{ margin: 0 }}>💬 スレッド一覧</h3>
-              
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  {/* 並び替えセレクトボックス */}
-                  <select 
-                    value={sortBy} 
-                    onChange={(e) => handleSortChange(e.target.value)}
-                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff', fontSize: '13px', cursor: 'pointer' }}
-                  >
-                    <option value="thread_new">スレッド作成順</option>
-                    <option value="comment_new">最新コメント順</option>
-                  </select>
-
-                  <button onClick={handleRefreshThreads} style={{ cursor: 'pointer', padding: '4px 8px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#fff', fontSize: '12px' }}>🔄 更新</button>
-                </div>
-              </div>
-
-              {threads.length === 0 ? (
-                <p style={{ color: 'gray' }}>現在スレッドはありません。新しく作成してください。</p>
-              ) : (
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  {threads.map((t) => (
-                    <li 
-                      key={t.id} 
-                      onClick={() => handleSelectThread(t)}
-                      style={{ padding: '12px', border: '1px solid #ddd', marginBottom: '8px', borderRadius: '4px', backgroundColor: '#f9f9f9', cursor: 'pointer', transition: 'background 0.2s' }}
-                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f0f0f0')}
-                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#f9f9f9')}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <h4 style={{ margin: '0 0 5px 0', color: '#0066cc', textDecoration: 'underline' }}>{t.title}</h4>
-                        
-                        {(user.isAdmin || user.id === t.user_id) && (
-                          <button 
-                            onClick={(e) => handleDeleteThread(t.id, e)} 
-                            style={{ color: 'red', cursor: 'pointer', padding: '2px 6px', fontSize: '12px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff' }}
-                          >
-                            🗑 削除
-                          </button>
-                        )}
-                      </div>
-                      <small style={{ color: 'gray' }}>作成者: {t.username || '不明'} | {new Date(t.created_at).toLocaleString()}</small>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {/* ページネーションコントロール */}
-              {threads.length > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '20px' }}>
-                  <button
-                    disabled={currentPage <= 1}
-                    onClick={() => fetchThreadsList(currentPage - 1)}
-                    style={{ padding: '5px 10px', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer' }}
-                  >
-                    ◀ 前へ
-                  </button>
-                  <span style={{ fontSize: '14px' }}>
-                    {currentPage} / {totalPages} ページ
-                  </span>
-                  <button
-                    disabled={currentPage >= totalPages}
-                    onClick={() => fetchThreadsList(currentPage + 1)}
-                    style={{ padding: '5px 10px', cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer' }}
-                  >
-                    次へ ▶
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     );
   }
 
-  // 【パターンC】サインイン前の画面（ログイン or 会員登録）
-  return (
-    <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', fontFamily: 'sans-serif' }}>
-      {view === 'login' ? (
-        <div style={{ border: '1px solid #ddd', padding: '25px', borderRadius: '8px', backgroundColor: '#fff' }}>
-          <h2 style={{ marginTop: 0, textAlign: 'center' }}>🔑 ログイン</h2>
-          <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>メールアドレス：</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>パスワード：</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }} required />
-            </div>
-            <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-              サインイン
-            </button>
-          </form>
-          <p style={{ textAlign: 'center', marginTop: '15px', fontSize: '14px' }}>
-            アカウントがない方は{' '}
-            <button onClick={() => { setView('register'); setError(''); setMessage(''); }} style={{ background: 'none', border: 'none', color: 'blue', textDecoration: 'underline', cursor: 'pointer' }}>
-              新規登録へ
-            </button>
-          </p>
-        </div>
-      ) : (
-        <div style={{ border: '1px solid #ddd', padding: '25px', borderRadius: '8px', backgroundColor: '#fff' }}>
-          <h2 style={{ marginTop: 0 }}>📝 会員新規登録</h2>
-          <form onSubmit={handleRegister}>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>ユーザー名：</label>
-              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>メールアドレス：</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>パスワード：</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }} required />
-            </div>
-            <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-              アカウントを作成する
-            </button>
-          </form>
-          <p style={{ textAlign: 'center', marginTop: '15px', fontSize: '14px' }}>
-            既に登録済みの方は{' '}
-            <button onClick={() => { setView('login'); setError(''); setMessage(''); }} style={{ background: 'none', border: 'none', color: 'blue', textDecoration: 'underline', cursor: 'pointer' }}>
-              ログインへ
-            </button>
-          </p>
-        </div>
-      )}
+  // 【パターンC】サインイン前の画面（ログイン or 会員登録）(/views/LoginPage.tsx)
 
-      {/* 通知・エラーメッセージのグローバル表示 */}
-      {message && <p style={{ color: 'green', marginTop: '15px', textAlign: 'center', fontWeight: 'bold' }}>{message}</p>}
-      {error && <p style={{ color: 'red', marginTop: '15px', textAlign: 'center', fontWeight: 'bold' }}>{error}</p>}
-    </div>
-  );
+  return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+
 }
 
 export default App;
