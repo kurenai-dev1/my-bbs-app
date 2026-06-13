@@ -21,7 +21,7 @@ function App() {
   // コメント用ステート
   const [activeThread, setActiveThread] = useState<{ id: number; title: string } | null>(null);
   const [posts, setPosts] = useState<any[]>([]);
-  const [newContent, setNewContent] = useState('');
+  // const [newContent, setNewContent] = useState('');
 
   // ハンドル名変更用ステート
   const [editDisplayName, setEditDisplayName] = useState('');
@@ -169,12 +169,10 @@ function App() {
   };
 
   // 7. コメントを新規投稿する関数
-  // 💡 引数に content と imageFile を受け取るように変更します
   const handleCreatePost = async (content: string, imageFile: File | null) => {
     if (!activeThread) return;
 
     try {
-      // 1. データの箱（FormData）を作る
       const formData = new FormData();
       formData.append('content', content);
     
@@ -182,17 +180,15 @@ function App() {
         formData.append('image', imageFile);
       }
 
-      // 2. ローカルストレージなどから、現在ログイン中のJWTトークンを直接取得する
-      // 💡 あなたのアプリでトークンを保存しているキー名（'token' や 'jwt' など）に合わせてください
       const token = localStorage.getItem('token'); 
 
-      // 3. ⚠️ customFetch ではなく、生の fetch を使う
-      const response = await fetch(`http://localhost:3000/api/threads/${activeThread.id}/posts`, {
+      // 💡 既存の customFetch をそのまま使う！
+      // API_BASE（環境変数）の結合は customFetch が裏で自動でやってくれます
+      const response = await customFetch(`/api/threads/${activeThread.id}/posts`, {
         method: 'POST',
         headers: {
-          // 💡 認証に必要なトークン「だけ」を自前でセットする
           'Authorization': `Bearer ${token}`
-          // ❌ 'Content-Type' は【絶対に書かない】。ブラウザに自動生成させます。
+          // ❌ 'Content-Type' は書かない（FormDataなのでブラウザに自動生成させる）
         },
         body: formData, // FormDataをそのまま渡す
       });
@@ -200,7 +196,6 @@ function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'コメントの投稿に失敗しました。');
 
-      // 4. 投稿が成功したら、コメント一覧を再取得（お手元の関数名に合わせてください）
       fetchPosts(activeThread.id);
 
     } catch (err: any) {

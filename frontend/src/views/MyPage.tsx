@@ -10,7 +10,7 @@ interface MyPageProps {
   editDisplayName: string;
   setEditDisplayName: (value: string) => void;
   handleUpdateDisplayName: (e: React.FormEvent) => void;
-  onBackToDashboard: () => void;
+  onBackToThreadList: () => void;
 }
 
 export const MyPage: React.FC<MyPageProps> = ({
@@ -18,7 +18,7 @@ export const MyPage: React.FC<MyPageProps> = ({
   editDisplayName,
   setEditDisplayName,
   handleUpdateDisplayName,
-  onBackToDashboard,
+  onBackToThreadList,
 }) => {
   // 💡 パスワード変更用のローカル状態（MyPage内だけで管理）
   const [currentPassword, setCurrentPassword] = useState('');
@@ -91,7 +91,7 @@ export const MyPage: React.FC<MyPageProps> = ({
   return (
     <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif' }}>
       <button 
-        onClick={onBackToDashboard} 
+        onClick={onBackToThreadList} 
         style={{ marginBottom: '20px', padding: '6px 12px', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#fff' }}
       >
         ⬅ 掲示板に戻る

@@ -51,8 +51,8 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // 💡 重要：アップロードされた画像フォルダを外部からURLでアクセスできるようにする（静的配信）
-// これにより、http://localhost:3000/uploads/xxx.jpg で画像が表示できるようになります
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// これにより、http://localhost:3000/api/uploads/xxx.jpg で画像が表示できるようになります
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ──────────────────────────────────────────
 // 1. 認証チェック用ミドルウェア（必ずAPIより上に配置します）

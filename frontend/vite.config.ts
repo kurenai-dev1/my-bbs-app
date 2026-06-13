@@ -7,6 +7,12 @@ export default defineConfig({
   base: './',
 
   plugins: [react()],
+
+  // build: {
+  //   minify: false,      // コードの圧縮・難読化を完全にオフにする
+  //   sourcemap: true,    // ソースマップを出力（ブラウザのF12で元のTSコードが見えるようになる）
+  // },
+
   server: {
     proxy: {
       // フロント側で `/api` から始まるリクエストを送った場合、

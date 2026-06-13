@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { API_BASE } from '../utils/client';
 
 // 💡 親から受け取るすべてのPropsの型定義を正しく記述しました
 interface ThreadDetailPageProps {
@@ -93,7 +94,7 @@ export function ThreadDetailPage({
               {p.image_url && (
                 <div style={{ marginTop: '8px', marginBottom: '8px' }}>
                   <img 
-                    src={`http://localhost:3000${p.image_url}`} 
+                    src={`${API_BASE}/api${p.image_url}`} 
                     alt="添付画像" 
                     style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '4px', objectFit: 'contain' }} 
                   />

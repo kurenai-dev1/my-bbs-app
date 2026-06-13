@@ -1,9 +1,8 @@
-import React from 'react';
 
 // Props（親から受け取るデータや関数）の型定義
 interface HeaderProps {
   user: { username: string; isAdmin: boolean };
-  onViewChange: (view: 'register' | 'login' | 'dashboard' | 'mypage') => void;
+  onViewChange: (view: 'register' | 'login' | 'threadlist' | 'mypage') => void;
   onLogout: () => void;
 }
 
