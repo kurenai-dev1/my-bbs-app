@@ -68,7 +68,7 @@ cd frontend
 npm run dev  
 ```
 起動後、Webブラウザで以下にアクセスします。  
-👉 http://localhost:5173/
+👉 `http://localhost:5173/`
 
 💡 初回ログイン時の注意点  
 
@@ -96,6 +96,9 @@ UPDATE users SET is_admin = true WHERE username = 'あなたのユーザー名';
 ### パターンB：別ドメイン（クロスドメイン）での運用
 フロントエンドとバックエンドを完全に異なるドメイン（またはサブドメイン `api.your-domain.com`）で運用する構成です。
 - **注意点**: バックエンド側（`server.js`）で、フロントエンドのドメインからのアクセスを許可する「CORS設定」を明示的に追加する必要があります。
+
+GitHub Pages での公開が一つの例です。  
+👉 https://kurenai-dev1.github.io/my-bbs-app/dist/
 
 ---
 ## 🛠️ 配備手順の一例（パターンA：Apacheの場合）
