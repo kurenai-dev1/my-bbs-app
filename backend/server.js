@@ -51,8 +51,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // 💡 重要：アップロードされた画像フォルダを外部からURLでアクセスできるようにする（静的配信）
-// これにより、http://localhost:3000/api/uploads/xxx.jpg で画像が表示できるようになります
-app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ──────────────────────────────────────────
 // 1. 認証チェック用ミドルウェア（必ずAPIより上に配置します）
@@ -77,7 +76,7 @@ const authenticateToken = (req, res, next) => {
 // ──────────────────────────────────────────
 // 2. ユーザー登録API
 // ──────────────────────────────────────────
-bbsRouter.post('/api/register', async (req, res) => {
+bbsRouter.post('/register', async (req, res) => {
   const { username, email, password } = req.body;
 
   if (!username || !email || !password) {
@@ -111,7 +110,7 @@ bbsRouter.post('/api/register', async (req, res) => {
     // 💡 2. 現在のドメイン名とポート（example.com や localhost:3000）を取得
     const host = req.get('host'); 
     // 💡 3. これらをガッチャンコして、クリック可能な完全なURLを自動生成！
-    const verificationUrl = `${protocol}://${host}${apiBasePath}/api/verify?token=${verificationToken}`;
+    const verificationUrl = `${protocol}://${host}${apiBasePath}/verify?token=${verificationToken}`;
 
     console.log('\n==================================================');
     console.log(`【メール模擬送信】 ${username} さん宛て`);
@@ -132,7 +131,7 @@ bbsRouter.post('/api/register', async (req, res) => {
 // ──────────────────────────────────────────
 // 3. ログインAPI
 // ──────────────────────────────────────────
-bbsRouter.post('/api/login', async (req, res) => {
+bbsRouter.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -183,7 +182,7 @@ bbsRouter.post('/api/login', async (req, res) => {
 // ──────────────────────────────────────────
 // 4. スレッド作成API（ログイン必須）
 // ──────────────────────────────────────────
-bbsRouter.post('/api/threads', authenticateToken, async (req, res) => {
+bbsRouter.post('/threads', authenticateToken, async (req, res) => {
   const { title } = req.body;
 
   if (!title) {
@@ -209,7 +208,7 @@ bbsRouter.post('/api/threads', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 5. スレッド一覧取得API（ログイン必須）
 // ──────────────────────────────────────────
-bbsRouter.get('/api/threads', authenticateToken, async (req, res) => {
+bbsRouter.get('/threads', authenticateToken, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const sort = req.query.sort || 'thread_new'; // デフォルトはスレッド新着順
   const limit = 5; 
@@ -231,7 +230,8 @@ bbsRouter.get('/api/threads', authenticateToken, async (req, res) => {
       orderByClause = 'ORDER BY COALESCE(MAX(p.created_at), t.created_at) DESC'; // コメント新着順
     }
 
-    // SQLをグループ化（GROUP BY）に対応させて、最新コメント時間を計算できるようにします
+    // 💡 修正：SELECT に COUNT(p.id) AS comment_count を追加しました
+    // 💡 GROUP BY に t.title, t.created_at, t.user_id を明示的に追加して SQL のエラーを防ぎます
     const result = await pool.query(`
       SELECT 
         t.id, 
@@ -239,12 +239,13 @@ bbsRouter.get('/api/threads', authenticateToken, async (req, res) => {
         t.created_at, 
         t.user_id, 
         u.display_name AS username,
+        COUNT(p.id) AS comment_count,
         COALESCE(MAX(p.created_at), t.created_at) AS last_activity
       FROM threads t
       LEFT JOIN users u ON t.user_id = u.id
       LEFT JOIN posts p ON t.id = p.thread_id AND p.is_deleted = false
       WHERE t.is_deleted = false
-      GROUP BY t.id, u.display_name
+      GROUP BY t.id, t.title, t.created_at, t.user_id, u.display_name
       ${orderByClause}
       LIMIT $1 OFFSET $2
     `, [limit, offset]);
@@ -254,15 +255,16 @@ bbsRouter.get('/api/threads', authenticateToken, async (req, res) => {
       currentPage: page,
       totalPages: totalPages
     });
-  } catch (err) {
+} catch (err) {
     console.error(err);
     res.status(500).json({ error: 'サーバーエラーが発生しました。' });
   }
 });
+
 // ──────────────────────────────────────────
 // 6. 特定スレッドのコメント一覧取得API（修正後）
 // ──────────────────────────────────────────
-bbsRouter.get('/api/threads/:threadId/posts', authenticateToken, async (req, res) => {
+bbsRouter.get('/threads/:threadId/posts', authenticateToken, async (req, res) => {
   const { threadId } = req.params;
   try {
     const result = await pool.query(`
@@ -283,7 +285,7 @@ bbsRouter.get('/api/threads/:threadId/posts', authenticateToken, async (req, res
 // 7. コメント投稿API（修正後）
 // ──────────────────────────────────────────
 // 💡 引数に `upload.single('image')` を追加して、画像ファイルを受け取れるようにします
-bbsRouter.post('/api/threads/:threadId/posts', authenticateToken, upload.single('image'), async (req, res) => {
+bbsRouter.post('/threads/:threadId/posts', authenticateToken, upload.single('image'), async (req, res) => {
   const { threadId } = req.params;
   const { content } = req.body;
 
@@ -315,7 +317,7 @@ bbsRouter.post('/api/threads/:threadId/posts', authenticateToken, upload.single(
 // ──────────────────────────────────────────
 // 8. スレッド削除API（論理削除 ＆ 本人または管理者）
 // ──────────────────────────────────────────
-bbsRouter.delete('/api/threads/:threadId', authenticateToken, async (req, res) => {
+bbsRouter.delete('/threads/:threadId', authenticateToken, async (req, res) => {
   const { threadId } = req.params;
   const { userId, isAdmin } = req.user; // トークンから操作ユーザーの情報を取得
 
@@ -349,7 +351,7 @@ bbsRouter.delete('/api/threads/:threadId', authenticateToken, async (req, res) =
 // ──────────────────────────────────────────
 // 9. コメント削除API（論理削除 ＆ 本人または管理者）
 // ──────────────────────────────────────────
-bbsRouter.delete('/api/posts/:postId', authenticateToken, async (req, res) => {
+bbsRouter.delete('/posts/:postId', authenticateToken, async (req, res) => {
   const { postId } = req.params;
   const { userId, isAdmin } = req.user;
 
@@ -380,7 +382,7 @@ bbsRouter.delete('/api/posts/:postId', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 10. ハンドル名変更API（ログイン必須）
 // ──────────────────────────────────────────
-bbsRouter.put('/api/user/profile', authenticateToken, async (req, res) => {
+bbsRouter.put('/user/profile', authenticateToken, async (req, res) => {
   const { newDisplayName } = req.body;
   const { userId } = req.user; // JWTから自分のユーザーIDを取得
 
@@ -405,7 +407,7 @@ bbsRouter.put('/api/user/profile', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 10.5 ログインユーザー情報取得API（自動ログイン・セッション復旧用）
 // ──────────────────────────────────────────
-bbsRouter.get('/api/me', authenticateToken, async (req, res) => {
+bbsRouter.get('/me', authenticateToken, async (req, res) => {
   try {
     // 💡 ログインJWTから抽出された自分のIDを取得（キー名は userId）
     const userId = req.user.userId;
@@ -433,7 +435,7 @@ bbsRouter.get('/api/me', authenticateToken, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ /api/me error:', err);
+    console.error('❌ /me error:', err);
     res.status(500).json({ error: 'サーバーエラーが発生しました。' });
   }
 });
@@ -441,7 +443,7 @@ bbsRouter.get('/api/me', authenticateToken, async (req, res) => {
 // ──────────────────────────────────────────
 // 11. メールアドレス確認（アカウント有効化）API
 // ──────────────────────────────────────────
-bbsRouter.get('/api/verify', async (req, res) => {
+bbsRouter.get('/verify', async (req, res) => {
   const { token } = req.query;
 
   if (!token) {
@@ -482,7 +484,7 @@ bbsRouter.get('/api/verify', async (req, res) => {
 // ============================================================
 // パスワード変更エンドポイント（password_hash 完全対応版）
 // ============================================================
-bbsRouter.post('/api/change-password', async (req, res) => {
+bbsRouter.post('/change-password', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

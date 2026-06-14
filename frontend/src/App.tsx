@@ -38,8 +38,8 @@ function App() {
       const fetchCurrentUser = async () => {
         try {
           // ※バックエンドに「ログイン中の自分の情報を返すAPI」がある想定です
-          // もしパスが違っていたら、適宜（/api/user/profile などに）書き換えてください
-          const response = await customFetch('/api/me', {
+          // もしパスが違っていたら、適宜（/user/profile などに）書き換えてください
+          const response = await customFetch('/me', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
         
@@ -97,7 +97,7 @@ function App() {
     const currentSort = sortOption || sortBy; 
     
     try {
-      const response = await customFetch(`/api/threads?page=${page}&sort=${currentSort}`, {
+      const response = await customFetch(`/threads?page=${page}&sort=${currentSort}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -128,7 +128,7 @@ function App() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await customFetch('/api/threads', {
+      const response = await customFetch('/threads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +152,7 @@ function App() {
   const fetchPosts = async (threadId: number) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await customFetch(`/api/threads/${threadId}/posts`, {
+      const response = await customFetch(`/threads/${threadId}/posts`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -184,7 +184,7 @@ function App() {
 
       // 💡 既存の customFetch をそのまま使う！
       // API_BASE（環境変数）の結合は customFetch が裏で自動でやってくれます
-      const response = await customFetch(`/api/threads/${activeThread.id}/posts`, {
+      const response = await customFetch(`/threads/${activeThread.id}/posts`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -210,7 +210,7 @@ function App() {
     
     const token = localStorage.getItem('token');
     try {
-      const response = await customFetch(`/api/threads/${threadId}`, {
+      const response = await customFetch(`/threads/${threadId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -228,7 +228,7 @@ function App() {
     
     const token = localStorage.getItem('token');
     try {
-      const response = await customFetch(`/api/posts/${postId}`, {
+      const response = await customFetch(`/posts/${postId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -247,7 +247,7 @@ function App() {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await customFetch('/api/user/profile', {
+      const response = await customFetch('/user/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

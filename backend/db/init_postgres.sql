@@ -30,7 +30,8 @@ CREATE TABLE public.posts (
     user_id integer,
     content text NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    is_deleted boolean DEFAULT false
+    is_deleted boolean DEFAULT false,
+    image_url text
 );
 
 

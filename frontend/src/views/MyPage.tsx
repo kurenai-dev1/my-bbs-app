@@ -58,7 +58,7 @@ export const MyPage: React.FC<MyPageProps> = ({
       // 既存の仕組みに合わせて localStorage からトークンを取得
       const token = localStorage.getItem('token');
       
-      const response = await customFetch('/api/change-password', {
+      const response = await customFetch('/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

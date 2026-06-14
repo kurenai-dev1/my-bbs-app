@@ -1,7 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { API_BASE } from '../utils/client';
 
-// 💡 親から受け取るすべてのPropsの型定義を正しく記述しました
 interface ThreadDetailPageProps {
   activeThread: { id: number; title: string };
   onBackToConversations: () => void;
@@ -20,13 +18,10 @@ export function ThreadDetailPage({
   user
 }: ThreadDetailPageProps) {
   const [newContent, setNewContent] = useState('');
-  
-  // 画像選択用のステート
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 画像が選択された時の処理（プレビュー用）
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -35,26 +30,24 @@ export function ThreadDetailPage({
     }
   };
 
-  // 送信ボタンが押された時の処理
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await handleCreatePost(newContent, selectedImage);
-    
-    // 送信成功したらフォームをリセット
     setNewContent('');
     setSelectedImage(null);
     setPreviewUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const apiServer = import.meta.env.VITE_API_SERVER || '';
+  const proxyPath = import.meta.env.VITE_PROXY_PATH || '/api';
+
   return (
     <div style={{ padding: '30px 20px', maxWidth: '600px', margin: '0 auto' }}>
       
-      {/* 💡 復活：共通タイトル */}
-      <h2 style={{ margin: '0 0 25px 0', fontSize: '24px' }}>🌐 会員制掲示板</h2>
+      <h2 style={{ margin: '0 0 25px 0', fontSize: '24px', textAlign: 'center' }}>🌐 会員制掲示板</h2>
       <hr style={{ border: '1px solid #eee', margin: '0 0 25px 0' }} />
 
-      {/* 💡 復活：「一覧に戻る」ボタン ＆ スレッドタイトル */}
       <div style={{ marginBottom: '20px' }}>
         <button 
           onClick={onBackToConversations} 
@@ -62,7 +55,7 @@ export function ThreadDetailPage({
         >
           ⬅ スレッド一覧に戻る
         </button>
-        <h3 style={{ backgroundColor: '#eef', padding: '12px', borderRadius: '4px', margin: '0' }}>
+        <h3 style={{ backgroundColor: '#eef', padding: '12px', borderRadius: '4px', margin: '0', textAlign: 'left' }}>
           📌 {activeThread.title}
         </h3>
       </div>
@@ -74,34 +67,36 @@ export function ThreadDetailPage({
         ) : (
           posts.map((p, index) => (
             <div key={p.id} style={{ borderBottom: '1px dashed #eee', paddingBottom: '12px', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <small style={{ color: '#666' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                <small style={{ color: '#666', textAlign: 'left' }}>
                   {index + 1}: <strong>{p.username || '退会済ユーザー'}</strong> ({new Date(p.created_at).toLocaleString()})
                 </small>
                 
-                {/* 💡 復活：管理者、または書き込んだ本人だけが削除できるボタン */}
                 {(user.isAdmin || user.id === p.user_id) && (
                   <button 
                     onClick={() => handleDeletePost(p.id)} 
-                    style={{ color: 'red', cursor: 'pointer', padding: '1px 5px', fontSize: '11px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff' }}
+                    style={{ color: 'red', cursor: 'pointer', padding: '2px 6px', fontSize: '11px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff', flexShrink: 0 }}
                   >
                     🗑 削除
                   </button>
                 )}
               </div>
 
-              {/* コメントの上部に画像を表示（データに image_url があれば表示） */}
+              {/* コメントの上部に画像を表示 */}
               {p.image_url && (
-                <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                /* 💡 修正：親要素に textAlign: 'center' を指定して画像を中央へ引き寄せる */
+                <div style={{ marginTop: '8px', marginBottom: '8px', textAlign: 'center' }}>
                   <img 
-                    src={`${API_BASE}/api${p.image_url}`} 
+                    src={`${apiServer}${proxyPath}${p.image_url}`} 
                     alt="添付画像" 
-                    style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '4px', objectFit: 'contain' }} 
+                    /* 💡 修正：margin: '0 auto' にして、インラインブロック化したときに中央整列が効くようにガード */
+                    style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '4px', objectFit: 'contain', display: 'block', margin: '0 auto' }} 
                   />
                 </div>
               )}
 
-              <p style={{ margin: '5px 0 0 0', whiteSpace: 'pre-wrap', color: '#222', fontSize: '15px' }}>{p.content}</p>
+              <p style={{ margin: '5px 0 0 0', whiteSpace: 'pre-wrap', color: '#222', fontSize: '15px', textAlign: 'left' }}>{p.content}</p>
+
             </div>
           ))
         )}
@@ -134,12 +129,14 @@ export function ThreadDetailPage({
 
         {/* 選択中画像のプレビュー表示 */}
         {previewUrl && (
-          <div style={{ marginBottom: '10px', position: 'relative' }}>
-            <img src={previewUrl} alt="プレビュー" style={{ maxHeight: '100px', borderRadius: '4px' }} />
+          /* 💡 応用：投稿フォーム側のプレビュー画像も、投稿される画像と見栄えを揃えるために中央寄せ（textAlign: 'center'）に変更しました */
+          <div style={{ marginBottom: '10px', position: 'relative', textAlign: 'center' }}>
+            <img src={previewUrl} alt="プレビュー" style={{ maxHeight: '100px', borderRadius: '4px', display: 'block', margin: '0 auto' }} />
             <button 
               type="button" 
               onClick={() => { setSelectedImage(null); setPreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-              style={{ position: 'absolute', top: 0, left: '110px', background: 'red', color: 'white', border: 'none', borderRadius: '50%', cursor: 'pointer', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              /* 💡 補足：プレビュー画像を中央に配置したため、バツボタンの位置の目安を中央から右にズラした配置にしています */
+              style={{ position: 'absolute', top: 0, right: '10px', background: 'red', color: 'white', border: 'none', borderRadius: '50%', cursor: 'pointer', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               ×
             </button>

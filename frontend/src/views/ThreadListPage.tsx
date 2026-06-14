@@ -1,6 +1,5 @@
 import React from 'react';
 
-// 親（App.tsx）から受け取るPropsの型定義
 interface ThreadListProps {
   threads: any[];
   newTitle: string;
@@ -33,6 +32,7 @@ export function ThreadListPage({
   user
 }: ThreadListProps) {
   return (
+    /* ⭕ margin: '0 auto' で画面の中央に配置します */
     <div style={{ padding: '30px 20px', maxWidth: '600px', margin: '0 auto' }}>
       
       <h2 style={{ margin: '0 0 25px 0', fontSize: '24px' }}>🌐 会員制掲示板</h2>
@@ -83,19 +83,24 @@ export function ThreadListPage({
               onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f0f0f0')}
               onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#f9f9f9')}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <h4 style={{ margin: '0 0 5px 0', color: '#0066cc', textDecoration: 'underline' }}>{t.title}</h4>
+              {/* 💡 タイトルが長文の時の改行・削除ボタン潰れ対策はここに残してあります */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                <h4 style={{ margin: '0 0 5px 0', color: '#0066cc', textDecoration: 'underline', textAlign: 'left' }}>
+                  {t.title}
+                </h4>
                 
                 {(user.isAdmin || user.id === t.user_id) && (
                   <button 
                     onClick={(e) => handleDeleteThread(t.id, e)} 
-                    style={{ color: 'red', cursor: 'pointer', padding: '2px 6px', fontSize: '12px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff' }}
+                    style={{ color: 'red', cursor: 'pointer', padding: '2px 6px', fontSize: '12px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff', flexShrink: 0 }}
                   >
                     🗑 削除
                   </button>
                 )}
               </div>
-              <small style={{ color: 'gray' }}>作成者: {t.username || '不明'} | {new Date(t.created_at).toLocaleString()}</small>
+              <small style={{ color: 'gray', textAlign: 'left', display: 'block', marginTop: '5px' }}>
+                作成者: {t.username || '不明'} | {new Date(t.created_at).toLocaleString()} | 💭 {t.comment_count || 0}
+              </small>
             </li>
           ))}
         </ul>

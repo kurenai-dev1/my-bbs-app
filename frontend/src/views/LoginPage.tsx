@@ -21,7 +21,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     e.preventDefault();
     setMessage(''); setError('');
     try {
-      const response = await customFetch('/api/register', {
+      const response = await customFetch('/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
@@ -40,7 +40,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     e.preventDefault();
     setMessage(''); setError('');
     try {
-      const response = await customFetch('/api/login', {
+      const response = await customFetch('/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
