@@ -124,13 +124,13 @@ cd backend
 npm install --production  
 ```
 本番環境用の .env を作成します。　
-データベースへの接続情報、シークレット文字列を設定します。　
+データベースへの接続情報、シークレット文字列を設定します。  
 PM2 等のプロセスマネージャーをインストールしてバックエンドを起動します。  
 ```bash
 pm2 start server.js --name "bbs-backend"  
 ```
 ### Webサーバー（プロキシ）の設定
-ブラウザが叩いた本来のドメイン情報をバックエンドへ引き継ぐため、    
+ブラウザが叩いた本来のドメイン情報をバックエンドへ引き継ぐため、  
 Apache の設定に ProxyPreserveHost On を必ず含めてルーティングします。　
 ```ini
 <VirtualHost *:443>
@@ -167,8 +167,5 @@ CORSの設定も必要になります。以下は一例です。
     Header set Access-Control-Allow-Methods "POST, GET, OPTIONS, PUT, DELETE"
     Header set Access-Control-Allow-Headers "Content-Type, Authorization"
 </IfModule>
-<<<<<<< HEAD
 ```
-=======
-```
->>>>>>> bfa880f33deae8926ed9976ae93e9b723b9772fa
+
