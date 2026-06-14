@@ -167,4 +167,8 @@ CORSの設定も必要になります。以下は一例です。
     Header set Access-Control-Allow-Methods "POST, GET, OPTIONS, PUT, DELETE"
     Header set Access-Control-Allow-Headers "Content-Type, Authorization"
 </IfModule>
+<<<<<<< HEAD
 ```
+=======
+```
+>>>>>>> bfa880f33deae8926ed9976ae93e9b723b9772fa
