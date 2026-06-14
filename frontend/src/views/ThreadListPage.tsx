@@ -99,7 +99,7 @@ export function ThreadListPage({
                 )}
               </div>
               <small style={{ color: 'gray', textAlign: 'left', display: 'block', marginTop: '5px' }}>
-                作成者: {t.username || '不明'} | {new Date(t.created_at).toLocaleString()} | 💭 {t.comment_count || 0}
+                　　💭 {t.comment_count || 0}　作成者: {t.username || '不明'}　{new Date(t.created_at).toLocaleString()} 
               </small>
             </li>
           ))}

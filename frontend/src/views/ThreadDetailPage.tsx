@@ -22,6 +22,9 @@ export function ThreadDetailPage({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 💡 【新設】現在拡大表示している画像のURL（null のときは閉じている状態）
+  const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -65,40 +68,46 @@ export function ThreadDetailPage({
         {posts.length === 0 ? (
           <p style={{ color: 'gray' }}>まだコメントがありません。最初のコメントをどうぞ！</p>
         ) : (
-          posts.map((p, index) => (
-            <div key={p.id} style={{ borderBottom: '1px dashed #eee', paddingBottom: '12px', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-                <small style={{ color: '#666', textAlign: 'left' }}>
-                  {index + 1}: <strong>{p.username || '退会済ユーザー'}</strong> ({new Date(p.created_at).toLocaleString()})
-                </small>
-                
-                {(user.isAdmin || user.id === p.user_id) && (
-                  <button 
-                    onClick={() => handleDeletePost(p.id)} 
-                    style={{ color: 'red', cursor: 'pointer', padding: '2px 6px', fontSize: '11px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff', flexShrink: 0 }}
-                  >
-                    🗑 削除
-                  </button>
-                )}
-              </div>
+          posts.map((p, index) => {
+            // 💡 ループ内で画像のフルURLを組み立てておきます
+            const fullImageUrl = p.image_url ? `${apiServer}${proxyPath}${p.image_url}` : null;
 
-              {/* コメントの上部に画像を表示 */}
-              {p.image_url && (
-                /* 💡 修正：親要素に textAlign: 'center' を指定して画像を中央へ引き寄せる */
-                <div style={{ marginTop: '8px', marginBottom: '8px', textAlign: 'center' }}>
-                  <img 
-                    src={`${apiServer}${proxyPath}${p.image_url}`} 
-                    alt="添付画像" 
-                    /* 💡 修正：margin: '0 auto' にして、インラインブロック化したときに中央整列が効くようにガード */
-                    style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '4px', objectFit: 'contain', display: 'block', margin: '0 auto' }} 
-                  />
+            return (
+              <div key={p.id} style={{ borderBottom: '1px dashed #eee', paddingBottom: '12px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                  <small style={{ color: '#666', textAlign: 'left' }}>
+                    {index + 1}: <strong>{p.username || '退会済ユーザー'}</strong> ({new Date(p.created_at).toLocaleString()})
+                  </small>
+                  
+                  {(user.isAdmin || user.id === p.user_id) && (
+                    <button 
+                      onClick={() => handleDeletePost(p.id)} 
+                      style={{ color: 'red', cursor: 'pointer', padding: '2px 6px', fontSize: '11px', border: '1px solid red', borderRadius: '3px', backgroundColor: '#fff', flexShrink: 0 }}
+                    >
+                      🗑 削除
+                    </button>
+                  )}
                 </div>
-              )}
 
-              <p style={{ margin: '5px 0 0 0', whiteSpace: 'pre-wrap', color: '#222', fontSize: '15px', textAlign: 'left' }}>{p.content}</p>
+                {/* コメントの上部に画像を表示 */}
+                {fullImageUrl && (
+                  <div style={{ marginTop: '8px', marginBottom: '8px', textAlign: 'center' }}>
+                    <img 
+                      src={fullImageUrl} 
+                      alt="添付画像" 
+                      /* 💡 修正：クリックしたらステートにURLをセット（ポップアップを開く） */
+                      onClick={() => setModalImageUrl(fullImageUrl)}
+                      /* 💡 修正：クリックできることが分かるよう cursor: 'pointer' を追加 */
+                      style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '4px', objectFit: 'contain', display: 'block', margin: '0 auto', cursor: 'pointer' }} 
+                    />
+                  </div>
+                )}
 
-            </div>
-          ))
+                <p style={{ margin: '5px 0 0 0', whiteSpace: 'pre-wrap', color: '#222', fontSize: '15px', textAlign: 'left' }}>{p.content}</p>
+
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -119,6 +128,25 @@ export function ThreadDetailPage({
 
       {/* コメント投稿フォーム */}
       <form onSubmit={onSubmit}>
+        {previewUrl && (
+          <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <img 
+                src={previewUrl} 
+                alt="プレビュー" 
+                style={{ maxHeight: '120px', borderRadius: '4px', display: 'block' }} 
+              />
+              <button 
+                type="button" 
+                onClick={() => { setSelectedImage(null); setPreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                style={{ position: 'absolute', top: '-8px', right: '-8px', background: 'red', color: 'white', border: 'none', borderRadius: '50%', cursor: 'pointer', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', fontWeight: 'bold' }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
         <textarea
           value={newContent}
           onChange={(e) => setNewContent(e.target.value)}
@@ -127,26 +155,63 @@ export function ThreadDetailPage({
           required
         />
 
-        {/* 選択中画像のプレビュー表示 */}
-        {previewUrl && (
-          /* 💡 応用：投稿フォーム側のプレビュー画像も、投稿される画像と見栄えを揃えるために中央寄せ（textAlign: 'center'）に変更しました */
-          <div style={{ marginBottom: '10px', position: 'relative', textAlign: 'center' }}>
-            <img src={previewUrl} alt="プレビュー" style={{ maxHeight: '100px', borderRadius: '4px', display: 'block', margin: '0 auto' }} />
-            <button 
-              type="button" 
-              onClick={() => { setSelectedImage(null); setPreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-              /* 💡 補足：プレビュー画像を中央に配置したため、バツボタンの位置の目安を中央から右にズラした配置にしています */
-              style={{ position: 'absolute', top: 0, right: '10px', background: 'red', color: 'white', border: 'none', borderRadius: '50%', cursor: 'pointer', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              ×
-            </button>
-          </div>
-        )}
-
         <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
           コメントを書き込む
         </button>
       </form>
+
+      {/* 💡 【新設】画像ポップアップモーダル本体 */}
+      {modalImageUrl && (
+        <div 
+          /* 背景の黒いフィルター */
+          onClick={() => setModalImageUrl(null)} // 背景クリックで閉じる
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999, // 一番手前に表示
+            cursor: 'zoom-out' // 閉じられることを示すカーソル
+          }}
+        >
+          <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
+            <img 
+              src={modalImageUrl} 
+              alt="拡大画像" 
+              style={{
+                maxWidth: '100%',
+                maxHeight: '90vh',
+                borderRadius: '8px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                objectFit: 'contain'
+              }} 
+            />
+            {/* 右上の閉じる(×)ボタン */}
+            <button
+              onClick={() => setModalImageUrl(null)}
+              style={{
+                position: 'absolute',
+                top: '-40px',
+                right: '0',
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '30px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
